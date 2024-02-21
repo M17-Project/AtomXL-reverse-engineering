@@ -1,0 +1,28 @@
+@startuml
+
+component Antenna
+component "RF Module\n(DMR-006)" {
+    portin RF
+    portout "Analog Audio"
+    portout UART
+
+    component "HR-C7000\n(probably)" as [HR-C7000]
+
+    [HR-C7000] -- UART
+    RF - [Unknown IC]
+    [Unknown IC] -- [HR-C7000]
+    [HR-C7000] -- "Analog Audio"
+}
+component "CODEC\n(ES8316)" as [CODEC]
+component "MCU\n(STM32F411)" as [MCU]
+component "Android Phone" as [Phone] {
+    portin USB
+}
+
+[Antenna] -- RF
+"Analog Audio" -- [CODEC]
+UART -- [MCU]
+[CODEC] -- [MCU] : (via I2C & I2S)
+[MCU] -- USB
+
+@enduml
