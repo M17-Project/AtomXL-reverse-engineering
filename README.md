@@ -50,7 +50,7 @@
 - See [command-format.md](./command-format.md) for the commands sent to the DMR module, via the MCU
 - inconveniently filters recieved audio (and maybe transmitted, untested)
 
-### IC in RF Module (assuming it actually is a HR-C7000, which may or may not be accurate)
+### IC in RF Module (seems to be an HR-C7000)
 
 - uses a C-SKY CK803S
   - [C-SKY Ghidra module](https://github.com/leommxj/ghidra_csky)
