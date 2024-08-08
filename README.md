@@ -55,3 +55,10 @@
 - uses a C-SKY CK803S
   - [C-SKY Ghidra module](https://github.com/leommxj/ghidra_csky)
   - [C-SKY Architecture user guide](https://github.com/c-sky/csky-doc/blob/master/CSKY%20Architecture%20user_guide.pdf)
+
+#### Flash IC
+
+![Flash IC](./images/DMR_Module_flash_IC.jpg)
+
+- made by GigaDevice
+- maybe a GD25LQ05C ?
