@@ -20,6 +20,8 @@
 
 ## Microcontroller
 
+- See [command-format.md](./command-format.md) for the commands sent to the MCU.
+
 ### is an STM32F411CEU6, from FCC ID photos
 
 - [product page](https://www.st.com/en/microcontrollers-microprocessors/stm32f411ce.html)
@@ -45,9 +47,7 @@
 ## RF Module (DMR-006)
 
 - [Product Page](http://www.hhttalk.com/en/product_show.asp?pageid=115&big_id=67) (lacking any useful information)
-- same command set as `SR_DMR_2WUF` from sunrisedigit.com
-  - [datasheet](./docs/SR_DMR_5WUF%20V100.pdf) [[Source](http://www.sunrisedigit.com/download/12-cn.html)]
-- also the same as the [ComJot API](./docs/ComJot_API-1.pdf), which is more conveniently in English
+- See [command-format.md](./command-format.md) for the commands sent to the DMR module, via the MCU
 - inconveniently filters recieved audio (and maybe transmitted, untested)
 
 ### IC in RF Module (assuming it actually is a HR-C7000, which may or may not be accurate)
