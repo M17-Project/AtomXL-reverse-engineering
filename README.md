@@ -32,6 +32,7 @@
 
 - android service calls `/vendor/bin/auto_update` shell script
 - ...which uses `/system/bin/extcmdtest` to put it into DFU mode
+- firmware location: `/vendor/data/mcu`
 
 ### uses STM32Cube HAL, 1.5.0 <= version <= 1.14.0
 
@@ -39,7 +40,7 @@
 - 1.5.0 adds `HAL_I2S_DMAPause` and `Resume`, which exist in firmware
 - 1.15.0 changes `HAL_I2S_Init` to not match disassembly
 
-### CODEC chip is Everest Semiconductor ES8316:
+## CODEC chip is Everest Semiconductor ES8316:
 
 - [official datasheet](./docs/ES8316%20PB.pdf) [[Source](http://everest-semi.com/pdf/ES8316%20PB.pdf)]
 - [datasheet with registers](./docs/es8316_user_guide.pdf) [[Source](https://forum.pine64.org/attachment.php?aid=1935)]
@@ -49,6 +50,7 @@
 - [Product Page](http://www.hhttalk.com/en/product_show.asp?pageid=115&big_id=67) (lacking any useful information)
 - See [command-format.md](./command-format.md) for the commands sent to the DMR module, via the MCU
 - inconveniently filters recieved audio (and maybe transmitted, untested)
+- firmware location: `/vendor/data/dmr`
 
 ### IC in RF Module (seems to be an HR-C7000)
 
