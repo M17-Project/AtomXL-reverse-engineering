@@ -1,28 +1,135 @@
 @startuml
+' Unihertz Atom XL - radio subsystem block diagram
+' Solid arrows: confirmed from firmware / datasheets.
+' Dashed grey arrows: inferred, not verified on hardware.
+' Sources: DMR006.U4A.V076.bin (C-SKY CK803S, headless Ghidra), STM32 fw 20201016161541.bin,
+'          HR_C7000 user guide v2.7, AT1846S programming guide, ES8316 user guide, ComJot DMR API.
 
-component Antenna
-component "RF Module\n(DMR-006)" {
-    portin RF
-    portout "Analog Audio"
-    portout UART
+top to bottom direction
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam defaultFontSize 11
+skinparam ArrowFontSize 10
+skinparam packageStyle rectangle
+skinparam nodesep 35
+skinparam ranksep 55
 
-    component "HR-C7000\n(probably)" as [HR-C7000]
+component "Antenna" as ANT
+component "RF front end\nPA / LNA / LPF" as FE
 
-    [HR-C7000] -- UART
-    RF - [Unknown IC]
-    [Unknown IC] -- [HR-C7000]
-    [HR-C7000] -- "Analog Audio"
+package "RF Module (DMR-006)" {
+
+  component TRX [
+    <b>AT1846S</b> RF transceiver
+    I2C addr 0x71, 26 MHz ref (0x04=0x0FD0)
+    --
+    0x58 = 0xBCFD: voice HPF/LPF, emphasis,
+    CTCSS filters bypassed (= OpenRTX M17 cfg)
+    0x30 = 0x4006/4026 (12.5k), 0x7006/7026 (25k)
+    Power save: duty-cycles 0x30[5,2], polls 0x1B
+  ]
+
+  package "HR-C7000" {
+    component CPU [
+      <b>CK803S CPU</b> (uC/OS-III)
+      fw DMR006.U4A.V076
+      --
+      flash XIP 0x0301_A000
+      IRAM code 0x0001_0000
+    ]
+    component MODEM [
+      <b>Modem</b> @0x1100_0000
+      DMR PHY/L2/L3, vocoder, FM chain
+      --
+      RF_MODE[24]=1: AF input, gain 0x4C/16
+      WORK_MODE[7]=1: FM mode
+      FM_BANDWIDTH never written:
+        BPF on, emphasis on (reset 0x5F)
+      FM_DEV_COEF never written:
+        TX limiter tr_sig_lim=0x0F
+      FM RX audio copy: 0x1600_04E0-08DF
+    ]
+    component CODEC7 [
+      <b>Codec</b> @0x1600_09C0
+      --
+      DAC/ADC fixed 8 kHz (FCR_DAC untouched)
+      DAC AGC / soft-clip DRC off
+      GCR_DACL by volume 1-9:
+        -10 -4 +3 +8 +11 +14 +17 +20 +22 dB
+      volume 0: LINEOUT_CTRL off
+    ]
+    component UART3 [
+      <b>UART3</b> @0x1409_0000
+      --
+      frames 68 | cmd | R/W | S/R |
+      cksum16 | len16 | data | 10
+    ]
+    component "GPIO7/8\nbit-banged I2C" as BBI2C
+  }
+
+  component "SPI NOR flash\nGigaDevice GD25Q\n(1724 Q5CE)" as FLASH
 }
-component "CODEC\n(ES8316)" as [CODEC]
-component "MCU\n(STM32F411)" as [MCU]
-component "Android Phone" as [Phone] {
-    portin USB
+
+package "Main board" {
+  component ES [
+    <b>ES8316</b> codec, I2C addr 0x10
+    --
+    RX ADC: LIN1/RIN1 differential
+    PGA +2.5 dB, HPF on, ALC off
+    noise gate hold-gain (0x2E=0x21)
+  ]
+  component MCU [
+    <b>STM32F411CEU6</b> (STM32Cube HAL)
+    fw /vendor/data/mcu/*.bin
+    --
+    host frame: 7E 96 69 | type | op | 01 |
+    len16 | data | cksum16 | 81
+    type 0: MCU, type 1: forwarded to module
+  ]
 }
 
-[Antenna] -- RF
-"Analog Audio" -- [CODEC]
-UART -- [MCU]
-[CODEC] -- [MCU] : (via I2C & I2S)
-[MCU] -- USB
+package "Android (Atom XL)" {
+  component APP [
+    <b>Intercom app</b>
+    + native service (HIDL)
+    --
+    cmd 0x23 DB_ANALOG_INFO (19 B):
+    freqs, band, power, sq, subtones,
+    pwrsave, volume, monitor, relay
+    stock: pwrsave=1 vol=8 mon=2 relay=2
+  ]
+}
+
+' ---------- RF (top) ----------
+ANT -- FE
+FE -- TRX : RF 400-480 MHz
+
+' ---------- Transceiver <-> C7000 ----------
+TRX --> MODEM : AF (demodulated audio)\nvia C7000 ADC
+TRX <.. MODEM #grey : TX modulation\n(C7000 DACs, two-point cfg)
+TRX <-- BBI2C : register access
+
+' ---------- C7000 internals ----------
+FLASH -right- CPU : XIP\n@0x0300_0000
+CPU - BBI2C
+CPU -- MODEM
+CPU -- UART3
+MODEM --> CODEC7 : FM RX audio\n(AUDIO_CONTROL.fm_play_ctrl)
+MODEM <-- CODEC7 : TX audio (MIC1)
+
+' ---------- Module <-> main board ----------
+CODEC7 --> ES : RX audio\n(LINEOUT)
+CODEC7 <-- ES : TX audio\n(-> MIC1)
+UART3 <--> MCU : UART
+CPU <.. MCU #grey : module power / PD\n(sys cmd 0x10)
+ES <-> MCU : I2S audio\nI2C1 control
+
+' ---------- Main board <-> phone (bottom) ----------
+MCU <---> APP : USB: UAC 32 kHz stereo,\ncommand channel, DFU
+
+legend bottom right
+  Solid = confirmed from firmware / datasheet
+  Dashed grey = inferred, not verified on hardware
+endlegend
 
 @enduml

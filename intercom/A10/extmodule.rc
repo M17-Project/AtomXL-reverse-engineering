@@ -1,0 +1,5 @@
+# Add by agold xuelb for extmodules
+service extmodule /system/bin/extmodule
+    class main
+    user root
+    group system

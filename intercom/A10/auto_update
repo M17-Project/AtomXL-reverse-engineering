@@ -1,0 +1,8 @@
+#!/bin/sh
+echo "updata start"
+extcmdtest -u1 -r1 -p1
+sleep 1.5
+dfu-util -d 0483:df11 -a 0 -s 0x08000000 -D $1
+sleep 0.5
+extcmdtest -u0 -p0 -r0
+echo "updata end"
