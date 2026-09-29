@@ -2,6 +2,12 @@
 
 Goal: make the Atom XL's built-in UHF radio usable for M17.
 
+## Further reading
+
+- [Firmware update paths](./atomxl-re-docs/firmware-update.md): MCU (DFU) and DMR module (YMODEM)
+- [DMR module firmware notes](./atomxl-re-docs/dmr-firmware-notes.md): memory map, registers, key functions
+- [Ghidra scripts](./atomxl-re-docs/tools/ghidra/): reproduce the analysis
+
 ## Block diagram
 
 ![Block diagram](images/block-diagram.png)
