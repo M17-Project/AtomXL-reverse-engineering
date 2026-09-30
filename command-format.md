@@ -3,8 +3,10 @@
 There are two protocol layers:
 
 ```
-Android app / native service --(host frames 7E 96 69 ... 81)--> STM32F411 --(module frames 68 ... 10, UART)--> DMR-006 (HR-C7000 UART3)
+Android app / native service --(host frames 7E 96 69 ... 81, USB CDC-ACM)--> STM32F411 --(module frames 68 ... 10, UART)--> DMR-006 (HR-C7000 UART3)
 ```
+
+On the phone, the host link is the STM32's USB CDC-ACM port, `/dev/ttyACM0`. The stock software opens it at 115200 8N1 raw.
 
 The STM32 handles type-0 (system) host frames itself. It re-packs type-1 (module) frames into module frames and forwards them, and it wraps the module's replies back into host frames.
 
@@ -44,14 +46,23 @@ Replies use the same format, with type and op echoed and flag = 0.
 
 | op | Data | Description |
 |---|---|---|
-| `0x01` | - | Get MCU firmware version. The reply has 14 bytes of data (format not confirmed). The MCU images are named with 14-digit timestamps. |
-| `0x08` | 1 byte: 1/0 | Enter/leave DMR module update mode: re-initialises the module UART and routes the module link for updating. |
-| `0x09` | n bytes | Raw write of the data to the module UART, with no framing. Used together with 0x08 to talk to the HR-C7000 boot ROM's serial download mode. |
-| `0x10` | 1 byte: 1/0 | DMR module power on/off. |
+| `0x01` | - | Get MCU firmware version. The reply is 14 ASCII digits, the firmware's build timestamp `YYYYMMDDhhmmss`, produced by `sprintf("%d%02d%02d%02d%02d%02d")` from `__DATE__`/`__TIME__`. For example, `20201016161541` for the image of the same name. |
+| `0x08` | 1 byte: 1/0 | Module update mode. 1 = the STM32 becomes a transparent bridge between USB CDC-ACM and the module UART (no framing either way), 0 = normal framed operation. The stock module updater uses this. |
+| `0x09` | n bytes | Raw write of the data to the module UART, with no framing. Not used by the stock updater (which uses bridge mode, 0x08), purpose otherwise unknown. |
+| `0x10` | 1 byte: 1/0 | DMR module power on/off. Sent by `extmodule`'s `setDmrOnOffState()`. |
 | `0x12` | 1 byte | Drives two module control GPIOs low (0 = also reconfigure them as outputs, otherwise re-initialise the UART). Probably reset/boot-mode control for updates (unconfirmed). |
 | other | - | Error reply: type 0, same op, data `02`. |
 
-For module firmware updates, the stock `auto_update` script only handles the MCU. That sequence is `extcmdtest -u1 -r1 -p1`, then `dfu-util -d 0483:df11 -a 0 -s 0x08000000 -D <file>`, then `extcmdtest -u0 -p0 -r0`.
+Ready-made system frames (built exactly as `extmodule`'s `make_cmd` does), for testing by hand:
+
+| Frame | Bytes |
+|---|---|
+| Module power off | `7E 96 69 00 10 01 00 01 00 FD EF 81` |
+| Module power on | `7E 96 69 00 10 01 00 01 01 FD EE 81` |
+| Bridge mode on | `7E 96 69 00 08 01 00 01 01 FD F6 81` |
+| Bridge mode off | `7E 96 69 00 08 01 00 01 00 FD F7 81` |
+
+Both firmware update procedures (MCU via DFU, module via YMODEM) are described in [firmware-update.md](./atomxl-re-docs/firmware-update.md).
 
 ### Module operations (type 1)
 

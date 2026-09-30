@@ -45,7 +45,7 @@ Modem (`0x11000000`):
 | Offset | Name | Notes |
 |---|---|---|
 | `0x100` | WORK_MODE | bit 7 = FM mode (set by `FUN_0301af60`) |
-| `0x104` | RF_MODE | bit 24 = AF input, bits 6:5 = 3: two-point modulation |
+| `0x104` | RF_MODE | bit 24 = AF input, bits 6:5 = 3: two-point modulation, bits 31 and 29 ("reserved") enable an undocumented physical-layer receive test mode |
 | `0x108` | SIG_CENTER | two-point per-path offset (±422 mV) |
 | `0x114` | RF_MOD_BIAS_CTRL | MOD1/MOD2 amplitude, and MOD1 RX bias |
 | `0x500` | FM_BANDWIDTH | **never written**, reset 0x5F keeps band-pass (bit 6) and emphasis (bit 4) ON |
@@ -54,6 +54,23 @@ Modem (`0x11000000`):
 Codec (`0x160009C0`): DAC/ADC at a fixed 8 kHz (FCR_DAC never written), volume
 byte → GCR_DACL digital gain. FM RX audio is mirrored in RAM at
 `0x160004E0`-`0x160008DF`.
+
+## Audio sample rates
+
+- The receive ADC digitises the AT1846S AF output at **38.4 kHz** (8 samples per
+  4800-baud symbol), before the FM chain's filters. No documented register exposes
+  these samples to the CPU.
+- The FM chain runs internally at 32-38.4 kHz (its tone blocks are specified
+  against a 32 kHz clock).
+- The modem hands audio to the codec as 16-bit words with an **8 kHz strobe**
+  (user guide §7.2). The CPU tone-playback path and the vocoder feed are 8 kHz too.
+- `FCR_DAC.dac_freq` (`0x160009D4`, bits 3:0) and `FCR_ADC.adc_freq`
+  (`0x160009D7`) document only `0000` = 8 kHz, other codes are "omitted". The
+  codec's THD is specified for Fs <= 16 kHz, so higher codes likely exist, but
+  with an 8 kHz source they would probably repeat samples rather than add
+  bandwidth. Untested.
+- FM receive RAM (`0x160004E0`-`0x160008DF`) holds two ping-pong buffers of 256
+  16-bit PCM samples each, stored big-endian (high byte at the lower address).
 
 AT1846S transceiver: I2C address 0x71, bit-banged by the C7000 on GPIO 7/8.
 Register 0x58 = 0xBCFD (all voice filters + emphasis bypassed — same as OpenRTX M17).

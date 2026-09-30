@@ -19,7 +19,9 @@ Signal path: antenna → **AT1846S** transceiver → **HR-C7000** baseband SoC �
 ## Android
 
 - Root with [Magisk](https://topjohnwu.github.io/Magisk/install.html).
-- The Intercom app talks to the hardware through a native (HIDL) service. [M17_Intercom](https://github.com/ad1217/M17_Intercom) is an example app that uses it.
+- The Intercom app talks to the hardware through a native service. [M17_Intercom](https://github.com/ad1217/M17_Intercom) is an example app that uses it.
+  - Android 10: `/system/bin/extmodule`, reached over TCP on 127.0.0.1 (ports 9985/9980).
+  - Android 11: the HIDL HAL `vendor.mediatek.hardware.aguiextmodule@1.0::IAguiExtModule` (methods include `updateDmr`, `updateMcu`, `startPtt`/`stopPtt`, `readTTyDevice`/`writeTTyDevice`, `readPcmDevice`/`writePcmDevice`). There is no `extmodule` binary on Android 11.
 - Receive audio reaches the app as USB Audio Class, 32 kHz stereo, read via HIDL `readPcmDevice`.
 - Firmware locations:
 
@@ -36,9 +38,17 @@ Identified from the FCC photos. [Datasheet](https://www.st.com/resource/en/datas
 
 - Built with the STM32Cube HAL, version between 1.5.0 and 1.14.0. 1.5.0 adds `HAL_I2S_DMAPause`/`Resume`, which exist in the firmware. 1.15.0 changes `HAL_I2S_Init` so it no longer matches.
 - The image is plain and loads at `0x08000000`.
+- USB interfaces: **CDC-ACM** for commands (`/dev/ttyACM0` on the phone), **USB Audio Class** for audio, and the ROM **DFU** loader for flashing.
 - It bridges USB to the module UART. Host frames (`7E 96 69 ... 81`) with type 1 are re-packed into module frames (`68 ... 10`). See [command-format.md](./command-format.md).
 - It configures the ES8316 over I2C1 (address `0x10`) and carries audio over I2S.
-- Flashing uses `dfu-util`. The Android service calls `auto_update`, which puts the MCU into DFU mode via `extcmdtest`. On Android 10, `extcmdtest` is in `/system/bin/`.
+- Flashing uses `dfu-util`. The Android service calls `auto_update`, which puts the MCU into DFU mode via `extcmdtest`. On Android 10, `extcmdtest` is in `/system/bin/`. See [firmware-update.md](./atomxl-re-docs/firmware-update.md).
+- The version reported by system op `0x01` is the build timestamp (`YYYYMMDDhhmmss` from `__DATE__`/`__TIME__`), which is also the image's file name.
+
+### Audio handling
+
+The MCU applies **no DSP** to either direction. The ES8316 is on I2S2 in full-duplex mode (16-bit Philips, STM32 is master and outputs MCLK), and DMA moves the samples directly into the USB Audio class ring buffers. EP `0x81` IN carries receive audio and EP `0x01` OUT carries transmit audio, in 128-byte packets (32 stereo frames per 1 ms). USB volume and mute requests become ES8316 register writes (ADC volume in 0.5 dB steps, reg `0x27`, mute, reg `0x26`), not software gain.
+
+The I2S clock is derived from the 26 MHz HSE via PLLI2S (M = 16, N = 121, R = 4), so the real sample rate is **32,002.77 Hz (+86.5 ppm)**. USB takes exactly 32 samples per millisecond and there is no feedback endpoint, so the DMA and USB ring pointers drift apart. With ideal clocks, the first ~100 ms skip happens after about 10 minutes of continuous streaming, then roughly every 19 minutes. A demodulator's symbol timing recovery absorbs the ppm offset, the skips cost a frame or two each.
 
 ## Codec: Everest ES8316
 
@@ -103,7 +113,7 @@ Things to watch for:
 
 ## Receive audio path and M17
 
-The receive chain is: AT1846S → C7000 FM chain → C7000 codec DAC → line-out → ES8316 → STM32 → USB. No AGC, compressor or limiter is active on it, but several stages band-limit the audio:
+The receive chain is: AT1846S → C7000 receive ADC (38.4 kHz) → C7000 FM chain → C7000 codec DAC (8 kHz) → line-out → ES8316 → STM32 → USB. No AGC, compressor or limiter is active on it, but several stages band-limit the audio:
 
 | Stage | Setting | Effect |
 |---|---|---|
@@ -112,6 +122,7 @@ The receive chain is: AT1846S → C7000 FM chain → C7000 codec DAC → line-ou
 | C7000 codec DAC | fixed at **8 kHz** | Audio limited to below 4 kHz |
 | C7000 codec DAC gain | set by the volume field | Volume 1-9 = -10, -4, +3, +8, +11, +14, +17, +20, +22 dB. The stock value 8 (+20 dB) risks clipping. |
 | ES8316 ADC | high-pass on | DC blocking only |
+| STM32 | none | Bit-exact DMA to USB, see [Audio handling](#audio-handling) for the clock drift |
 
 The module sets the AT1846S up on its own, and the host has no raw register access.
 
@@ -121,7 +132,9 @@ The module sets the AT1846S up on its own, and the host has no raw register acce
 - A lower `volume` reduces the digital gain (command `0x2E`).
 - `monitor` = 1 holds the audio path open (command `0x2F`).
 
-**What needs firmware changes:** removing the C7000 band-pass and emphasis, and raising the codec sample rate.
+8 kHz sampling is theoretically enough for M17: its baseband ends at 3.6 kHz, below the 4 kHz Nyquist limit. The bigger losses are the C7000's band-pass filter and emphasis, and the DAC's reconstruction roll-off near 3.4-4 kHz. So clearing `FM_BANDWIDTH` plus software equalisation should come before any sample-rate work.
+
+**What needs firmware changes:** removing the C7000 band-pass and emphasis, and raising the codec sample rate (which may not be possible, since the modem feeds the codec with an 8 kHz strobe).
 That requires patching the DMR module firmware or writing a replacement.
 The firmware never writes to those registers, and no host command exposes them.
 

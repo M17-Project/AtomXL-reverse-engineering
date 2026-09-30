@@ -85,13 +85,17 @@ package "Main board" {
     host frame: 7E 96 69 | type | op | 01 |
     len16 | data | cksum16 | 81
     type 0: MCU, type 1: forwarded to module
+    --
+    audio: no DSP, DMA I2S <-> USB
+    I2S 32 kHz (actual 32,002.8 Hz)
   ]
 }
 
 package "Android (Atom XL)" {
   component APP [
     <b>Intercom app</b>
-    + native service (HIDL)
+    + native service
+    (A10: extmodule, A11: HIDL HAL)
     --
     cmd 0x23 DB_ANALOG_INFO (19 B):
     freqs, band, power, sq, subtones,
@@ -125,7 +129,7 @@ CPU <.. MCU #grey : module power / PD\n(sys cmd 0x10)
 ES <-> MCU : I2S audio\nI2C1 control
 
 ' ---------- Main board <-> phone (bottom) ----------
-MCU <---> APP : USB: UAC 32 kHz stereo,\ncommand channel, DFU
+MCU <---> APP : USB: UAC 32 kHz stereo,\nCDC-ACM commands, DFU
 
 legend bottom right
   Solid = confirmed from firmware / datasheet
